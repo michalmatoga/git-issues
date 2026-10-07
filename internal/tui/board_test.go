@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/steviee/git-issues/internal/config"
 	"github.com/steviee/git-issues/internal/issue"
 )
@@ -334,6 +336,41 @@ func TestColumnAddRemove(t *testing.T) {
 	removed = col.Remove(99)
 	if removed != nil {
 		t.Error("removing non-existent should return nil")
+	}
+}
+
+func TestColumnRenderFitsGrowingListWithMixedCardHeights(t *testing.T) {
+	for _, cursor := range []int{0, 6, 11} {
+		t.Run(fmt.Sprintf("cursor-%d", cursor), func(t *testing.T) {
+			col := NewColumn("open")
+			for i := 0; i < 12; i++ {
+				iss := &issue.Issue{
+					ID:       i + 1,
+					Title:    fmt.Sprintf("Issue %02d", i+1),
+					Priority: "medium",
+				}
+				if i%2 == 0 {
+					iss.Labels = []string{"bug"}
+				}
+				col.Issues = append(col.Issues, iss)
+			}
+			col.Cursor = cursor
+
+			const width, height = 40, 20
+			view := col.Render(width, height, true)
+			if got := lipgloss.Height(view); got != height {
+				t.Errorf("rendered height = %d, want %d", got, height)
+			}
+			if selectedTitle := col.Issues[cursor].Title; !strings.Contains(view, selectedTitle) {
+				t.Errorf("selected issue %q is clipped from the column", selectedTitle)
+			}
+			if cursor == 0 && !strings.Contains(view, "↓") {
+				t.Error("expected a bottom scroll indicator when issues remain below")
+			}
+			if cursor == len(col.Issues)-1 && !strings.Contains(view, "↑") {
+				t.Error("expected a top scroll indicator after scrolling down")
+			}
+		})
 	}
 }
 
